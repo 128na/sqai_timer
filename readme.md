@@ -6,6 +6,7 @@
 
 # 使い方
 
+https://github.com/128na/sqai_timer/releases/tag/1.0.0
 リリースページからsqai_timer.zipをダウンロード、解凍した `sqai_timer` のフォルダを `Simutrans\ai` フォルダ内にコピーしてください。
 
 Simutransを起動し、会社を `ScriptAI` 属性で作成、スクリプトは `sqai_timer` を指定します。
