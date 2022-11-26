@@ -1,8 +1,8 @@
 // 設定
 // 通知周期（分）
-notify_period <- 2;
+notify_period <- 15;
 // セーブ通知周期（分）
-save_notify_period <- 5;
+save_notify_period <- 30;
 
 // プレイヤー
 player <- null;
