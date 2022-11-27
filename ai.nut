@@ -1,27 +1,19 @@
 // 設定
 // セーブ通知周期（分）
-notify_period <- 1;
+notify_period <- 15;
 
-// プレイヤー
-player <- null;
-// 前回通知した日時
-notified_at <- null;
-prev_timestamp <- null;
-// メッセージの座標
-pos <- coord(0, 0);
+total_play_time_manager <- null;
+play_time_notify_manager <- null;
+message_sender <- null;
+message_builder <- null;
 
 function start(pl_num) {
-    player = player_x(pl_num);
-    notified_at = time();
-    prev_timestamp = time();
-    if("total_play_time" in persistent == false) {
-        persistent.total_play_time <- 0;
-    }
-    local message = format(
-        "AIが起動しました。 %d分ごとにセーブをするように通知します。", 
-        notify_period
-    );
-    gui.add_message_at(player, message, pos);
+    total_play_time_manager = TotalPlayTimeManager(persistent);
+    play_time_notify_manager = PlayTimeNotifyManager(notify_period);
+    message_sender = MessageSender(gui, pl_num);
+    message_builder = MessageBuilder(total_play_time_manager, play_time_notify_manager);
+
+    message_sender.send(message_builder.buildStartMessage());
 }
 
 function resume_game(pl_num) {
@@ -29,34 +21,107 @@ function resume_game(pl_num) {
 }
 
 function step() {
-    if (player) {
+    if(total_play_time_manager) {
+        total_play_time_manager.update();
+    }
+    if(play_time_notify_manager && play_time_notify_manager.shouldNotify()) {
+        play_time_notify_manager.reset();
+        message_sender.send(message_builder.buildSaveMessage());
+    }
+}
+
+class TotalPlayTimeManager {
+    persistent = null;
+    prev = null;
+
+    constructor(_persistent) {
+        persistent = _persistent;
+        if("total_play_time" in persistent == false) {
+            persistent.total_play_time <- 0;
+        }
+        prev = time();
+    }
+
+    function update() {
         local now = time();
-        if(notify_period > 0 && now - notified_at >= notify_period*60) {
-            local message = format(
-                "現在 %s、総プレイ時間 %.1f 時間です。そろそろセーブしましょう。", 
-                get_date(),
-                get_total_play_hours()
+        if(prev < now) {
+            persistent.total_play_time += now - prev;
+            prev = now;
+        }
+    }
+
+    function getTotalPlayTime() {
+        if("total_play_time" in persistent) {
+            return format(
+                "%d時間%02d分%02d秒", 
+                persistent.total_play_time / 3600, 
+                (persistent.total_play_time % 3600)/ 60
+                persistent.total_play_time % 60
             );
-            gui.add_message_at(player, message, pos);
-            notified_at = now;
         }
-        if(prev_timestamp < now) {
-            persistent.total_play_time += now - prev_timestamp;
-            prev_timestamp = now;
-        }
+        throw Error("total_play_time not found.");
     }
 }
 
-function get_date() {
-    local d = date();
-    // Y/m/d H:i
-    return format("%d/%02d/%02d %02d:%02d", d.year, d.month, d.day, d.hour, d.min);
+class PlayTimeNotifyManager {
+    period = null;
+    prev = null;
+
+    constructor(_period) {
+        period = _period;
+        prev = time();
+    }
+
+    function shouldNotify() {
+        return period > 0 && time() - prev >= period*60;
+    }
+
+    function reset() {
+        prev = time();
+    }
 }
 
-function get_total_play_hours() {
-    if("total_play_time" in persistent) {
-        return persistent.total_play_time.tofloat() / 3600.0;
+class MessageSender {
+    gui = null;
+    player = null;
+
+    constructor(_gui, _pl_num) {
+        gui = _gui;
+        player = player_x(_pl_num);
     }
-    persistent.total_play_time <- 0;
-    return 0.0;
+
+    function send(message) {
+        gui.add_message_at(player, message, coord(0, 0));
+    }
+}
+
+class MessageBuilder {
+    total_play_time_manager = null;
+    play_time_notify_manager = null;
+    constructor(_total_play_time_manager, _play_time_notify_manager) {
+        total_play_time_manager = _total_play_time_manager;
+        play_time_notify_manager = _play_time_notify_manager;
+    }
+
+    function buildStartMessage() {
+        return format(
+            "現在%s、総プレイ時間は%sです。AIが%d分ごとにセーブをするように通知します。",
+            getDate(),
+            total_play_time_manager.getTotalPlayTime()
+            play_time_notify_manager.period
+        );
+    }
+
+    function buildSaveMessage() {
+        return format(
+            "現在%s、総プレイ時間は%sです。そろそろセーブしましょう。", 
+            getDate(),
+            total_play_time_manager.getTotalPlayTime()
+        );
+    }
+
+    function getDate() {
+        local d = date();
+        return format("%d/%02d/%02d %02d:%02d", d.year, d.month, d.day, d.hour, d.min);
+    }
 }
